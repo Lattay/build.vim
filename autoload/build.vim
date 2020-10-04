@@ -417,7 +417,7 @@ function! build#target(...) " {{{
     else
         if a:0 ==# 0
           if !has_key(l:command, 'build')
-            return s:log_err('build#target(): no default command for this buildsystem')
+            return s:log_err('build#target(): this build system does not define a build command')
           endif 
           let l:template = l:command['build']
           let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system)
@@ -425,12 +425,10 @@ function! build#target(...) " {{{
           let l:subcommand = a:1 
           if has_key(l:command, l:subcommand)
             let l:template = l:command[l:subcommand]
-            let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system) . ' ' . join(a:000[1:], ' ')
-          elseif has_key(l:command, 'base')
-            let l:template = l:command['base']
-            let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system) . ' ' . join(a:000, ' ')
+            let l:args =  join(a:000[1:], ' ')
+            let l:final_command = s:prepare_cmd_for_shell(l:template.(empty(l:args)? '' : ' '.l:args), l:build_system)
           else
-            return s:log_err('build#target(): no base command for this buildsystem')
+            return s:log_err('build#target(): '.l:subcommand.' is not a valid command for this buildsystem')
           endif 
         endif
         call s:run_in_env(l:build_system.path, l:final_command)
