@@ -373,8 +373,8 @@ function! build#init(...) " {{{
   call s:run_in_env(l:build_system.path, l:init_cmd . (a:0? ' ' . a:1 : ''))
 endfunction " }}}
 
-" Print usage examples for the given fallback targets.
-function! s:print_fallback_examples(fallback_targets) " {{{
+" Print usage examples for the given command dictionary.
+function! s:print_subcommand_examples(fallback_targets) " {{{
   for [target, command] in items(a:fallback_targets)
     echo '  :Build ' . target . ' [args...]'
     echo '      => ' . s:prepare_cmd_for_shell(command) . ' [args...]'
@@ -408,6 +408,10 @@ endfunction " }}}
 "   5) rm ./'foo'
 function! build#target(...) " {{{
 
+  if a:0 > 1
+    return s:log_err('build#target(): too many arguments. Takes 0 or 1 argument.')
+  endif
+
   let l:build_system = build#get_current_build_system()
 
   if !empty(l:build_system)
@@ -422,11 +426,12 @@ function! build#target(...) " {{{
           let l:template = l:command['build']
           let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system)
         else
-          let l:subcommand = a:1 
+          let l:args = split(a:1, ' ')
+          let l:subcommand = l:args[0]
+          let l:cmd_args = (len(l:args) == 1)? '' : ' '.join(l:args[1:], ' ')
           if has_key(l:command, l:subcommand)
-            let l:template = l:command[l:subcommand]
-            let l:args =  join(a:000[1:], ' ')
-            let l:final_command = s:prepare_cmd_for_shell(l:template.(empty(l:args)? '' : ' '.l:args), l:build_system)
+            let l:template = l:command[l:subcommand].l:cmd_args
+            let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system)
           else
             return s:log_err('build#target(): '.l:subcommand.' is not a valid command for this buildsystem')
           endif 
@@ -438,10 +443,6 @@ function! build#target(...) " {{{
 
   if !strlen(expand('%:t'))
     return s:log('Current file has no name')
-  endif
-
-  if a:0 > 1
-    return s:log_err('build#target(): too many arguments. Takes 0 or 1 argument when no build system is available')
   endif
 
   if a:0 == 0
@@ -466,7 +467,7 @@ function! build#target(...) " {{{
       \ . &filetype . '"')
     echo "\n"
     echo 'Commands available for this file:'
-    call s:print_fallback_examples(l:commands)
+    call s:print_subcommand_examples(l:commands)
     return
   endif
 
@@ -483,7 +484,15 @@ function! build#info() " {{{
     echo 'Build system:      ' . l:build_system.name
     echo 'Project directory: ' . l:build_system.path
     echo '-'
-    echo 'Build command:     ' . l:command
+    if type(l:command) ==# type('')
+      echo 'Build command:     ' . l:command
+    else
+      echo 'Usage:'
+      echo '  :Build [SUBCMD [args...]]'
+      echo "\n"
+      echo 'Examples:'
+      call s:print_subcommand_examples(l:command)
+    endif
 
     let l:init_cmd = s:get_buildsys_item(l:build_system.name, 'init')
     if !empty(l:init_cmd)
@@ -508,5 +517,5 @@ function! build#info() " {{{
   echo '  :Build [TARGET [args...]]'
   echo "\n"
   echo 'Examples:'
-  call s:print_fallback_examples(l:commands)
+  call s:print_subcommand_examples(l:commands)
 endfunction " }}}
