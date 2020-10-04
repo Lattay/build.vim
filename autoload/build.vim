@@ -172,13 +172,25 @@ function! s:get_buildsys_item(bs_name, key) " {{{
   if exists('g:build#systems')
     \ && has_key(g:build#systems, a:bs_name)
     \ && has_key(g:build#systems[a:bs_name], a:key)
-    return g:build#systems[a:bs_name][a:key]
-  elseif has_key(s:build_systems, a:bs_name)
-    \ && has_key(s:build_systems[a:bs_name], a:key)
-    return s:build_systems[a:bs_name][a:key]
+    let l:user_cmd = g:build#systems[a:bs_name][a:key]
   else
-    return 0
+    let l:user_cmd = {}
   endif
+  if type(l:user_cmd) ==# type('')
+    return l:user_cmd
+  endif
+  if has_key(s:build_systems, a:bs_name)
+    \ && has_key(s:build_systems[a:bs_name], a:key)
+
+    let l:builtin_cmd = s:build_systems[a:bs_name][a:key]
+  else
+    let l:builtin_cmd = {}
+  endif
+  if type(l:builtin_cmd) ==# type('')
+    return empty(l:user_cmd)? l:builtin_cmd : l:user_cmd
+  endif
+
+  return extend(l:builtin_cmd, l:user_cmd)
 endfunction " }}}
 
 " Return a dictionary containing all fallback targets for the specified language. Will return an
