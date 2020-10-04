@@ -136,6 +136,30 @@ function! s:log_err(message) " {{{
   echoerr 'build.vim: ' . a:message . '.'
 endfunction " }}}
 
+" Return the path dest relative to the path start
+" if dest or start are relative path, they are taken 
+" relative to the current working directory
+" Example:
+"   " current working directory is /a/b/c
+"   s:relative_to('/a/b/d/e/f/g', '../d/e')
+" Returns:
+"   'f/g'
+function! s:relative_to(dest, start) " {{{
+  " make sure both path are absolute
+  let l:dest = fnamemodify(a:dest, ':p')
+  let l:start = fnamemodify(a:start, ':p')
+
+  let l:initial_wd = getcwd()
+
+  " move to the starting directory
+  exec 'lcd '.l:start
+  " expand the destination into a relative path to cwd
+  let l:dest = fnamemodify(l:dest, ':.')
+  " move back to were we started
+  exec 'lcd '.l:initial_wd
+  return l:dest
+endfunction " }}}
+
 " Return the specified key for the given build system. Will return 0 if the
 " requested item doesn't exist. It will first look into g:build#systems and
 " then fallback to s:build_systems.
@@ -206,9 +230,14 @@ endfunction " }}}
 "   s:prepare_cmd_for_shell('This is %NAME%')
 " Returns:
 "   "This is 'main.cpp'"
-function! s:prepare_cmd_for_shell(str) " {{{
+function! s:prepare_cmd_for_shell(str, ...) " {{{
   let l:str = a:str
   let l:str = substitute(l:str, '%PATH%', escape(shellescape(expand('%:p:h')), '\'), 'g')
+  if a:0 > 1 && has_key(a:2, 'path')
+    let l:str = substitute(l:str, '%RELPATH%', escape(shellescape(s:relative_to(expand('%:p:h'), a:2.path)), '\'), 'g')
+  else
+    let l:str = substitute(l:str, '%RELPATH%', '.', 'g')
+  endif
   let l:str = substitute(l:str, '%NAME%', escape(shellescape(expand('%:t')), '\'),   'g')
   let l:str = substitute(l:str, '%HEAD%', escape(shellescape(expand('%:t:r')), '\'), 'g')
   return l:str
@@ -378,19 +407,43 @@ endfunction " }}}
 "   4) -- ERROR: target 'all' is not defined for C files --
 "   5) rm ./'foo'
 function! build#target(...) " {{{
-  if a:0 > 1
-    return s:log_err('build#target(): too many arguments. Takes 0 or 1 argument')
-  endif
 
   let l:build_system = build#get_current_build_system()
+
   if !empty(l:build_system)
     let l:command = s:get_buildsys_item(l:build_system.name, 'command')
-    call s:run_in_env(l:build_system.path, l:command . (a:0? ' ' . a:1 : ''))
+    if type(l:command) ==# type('')
+        call s:run_in_env(l:build_system.path, l:command . (a:0? ' ' . a:1 : ''))
+    else
+        if a:0 ==# 0
+          if !has_key(l:command, 'build')
+            return s:log_err('build#target(): no default command for this buildsystem')
+          endif 
+          let l:template = l:command['build']
+          let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system)
+        else
+          let l:subcommand = a:1 
+          if has_key(l:command, l:subcommand)
+            let l:template = l:command[l:subcommand]
+            let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system) . ' ' . join(a:000[1:], ' ')
+          elseif has_key(l:command, 'base')
+            let l:template = l:command['base']
+            let l:final_command = s:prepare_cmd_for_shell(l:template, l:build_system) . ' ' . join(a:000, ' ')
+          else
+            return s:log_err('build#target(): no base command for this buildsystem')
+          endif 
+        endif
+        call s:run_in_env(l:build_system.path, l:final_command)
+    endif
     return
   endif
 
   if !strlen(expand('%:t'))
     return s:log('Current file has no name')
+  endif
+
+  if a:0 > 1
+    return s:log_err('build#target(): too many arguments. Takes 0 or 1 argument when no build system is available')
   endif
 
   if a:0 == 0
