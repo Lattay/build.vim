@@ -32,6 +32,16 @@ let s:build_systems =
   \     'file'    : 'dub.json',
   \     'command' : 'dub',
   \   },
+  \   'Dune':
+  \   {
+  \     'file'    : 'dune',
+  \     'command' : {
+  \       'do'    : 'dune',
+  \       'build' : 'dune build',
+  \       'clean' : 'dune clean',
+  \       'run'   : 'dune exec %RELPATH%/%HEAD%.exe',
+  \      },
+  \   },
   \   'Make':
   \   {
   \     'file'    : 'Makefile,makefile',
